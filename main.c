@@ -43,19 +43,27 @@ static unsigned short pal[256] = {
     RGB565(255,0,0),
 };
 
+pthread_mutex_t vsync_mutex;
+pthread_cond_t vsync_condition = PTHREAD_COND_INITIALIZER;
 void vsync(DISPMANX_UPDATE_HANDLE_T u, void* arg) {
-
+	pthread_mutex_lock(&vsync_mutex);
+	pthread_cond_signal(&vsync_condition);
+	pthread_mutex_unlock(&vsync_mutex);
+}
+void vsync2() {
     int ret;
     DISPMANX_UPDATE_HANDLE_T    update;
-
+puts("c");
     update = vc_dispmanx_update_start( 10 );
     assert( update );
+ puts("d");
 
     ret = vc_dispmanx_element_change_source( update, element, resource[next_resource]);
     assert( ret == 0 );
-
-    ret = vc_dispmanx_update_submit_sync( update );
+puts("a");
+    ret = vc_dispmanx_update_submit( update ,NULL,NULL);
     assert( ret == 0 );
+puts("b");
 
     if(next_resource != 2) {
 
@@ -69,6 +77,15 @@ void vsync(DISPMANX_UPDATE_HANDLE_T u, void* arg) {
 
     }
 
+}
+void *thread_main(void *arg) {
+	pthread_mutex_lock(&vsync_mutex);
+	while (1) {
+		pthread_cond_wait(&vsync_condition,&vsync_mutex);
+		printf("vsync slave\n");
+		vsync2();
+		printf("ret\n");
+	}
 }
 
 int main(void)
@@ -143,6 +160,13 @@ int main(void)
     ret = vc_dispmanx_update_submit_sync( update );
     assert( ret == 0 );
 
+
+
+// pthread start
+pthread_t worker;
+pthread_mutex_init(&vsync_mutex,NULL);
+pthread_create(&worker,NULL,thread_main,NULL);
+// pthread end
     vc_dispmanx_vsync_callback(display, vsync, NULL);
 
     while(1) {
